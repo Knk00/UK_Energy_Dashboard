@@ -132,7 +132,7 @@ server <- function(input, output, session) {
     lon = c(2.35, 4.90, 4.35, -8.24, 10.75)
   )
   
- 
+  
   # Create a consistent weight for all pipelines and dynamic flows
   pipeline_weight <- 5  # Set a fixed pipeline width
   

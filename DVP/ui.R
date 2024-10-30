@@ -2,6 +2,8 @@ library(shiny)
 library(shinydashboard)
 library(shinythemes)
 library(plotly)
+library(streamgraph)
+library(leaflet)
 
 # Define UI for application
 ui <- navbarPage(
@@ -50,7 +52,7 @@ ui <- navbarPage(
              div(class = "introduction",
                  tags$h1("Introduction"),
                  tags$p("The UK Energy Dashboard offers an in-depth analysis of electricity consumption patterns from 2009 to 2024, spotlighting the nation's ongoing transition from fossil fuels to renewable energy sources. It tracks key trends in energy generation, carbon emissions, and the integration of low-carbon technologies, providing insights into the evolution of the UK's energy landscape. The dashboard also examines the role of interconnectors, national demand, and policy changes, helping stakeholders understand the progress towards sustainability goals and the challenges that lie ahead in meeting future energy demands.",
-                        )
+                 )
              ),
              div(class = "section",
                  div(class = "text-section",
@@ -113,22 +115,22 @@ ui <- navbarPage(
                column(12,
                       tags$h1("Sustainable Energy Transition",style="margin-top:50px;margin-bottom:30px;"),
                       tags$p("The Sustainable Energy Transition visualisation illustrates the shift in the UK’s energy mix over time, showing how different energy sources, such as renewables, low-carbon technologies, and fossil fuels, have contributed to electricity generation from 2009 to 2024."),
-             ),
-             tags$p(" ", style="margin-bottom:40px;margin-bottom:40px;"),
-             fluidRow(
-               column(4,
-                      wellPanel(
-                        tags$h4("Interactive Filters"),
-                        selectInput("timeResolutionStream", "Select Time Resolution:",
-                                    choices = c("Monthly", "Yearly"))
-                      )),
-               column(8, streamgraphOutput("energyStreamGraph")),
-               tags$p("", style="margin-bottom:40px;")
-             ),
-             
-             tags$h2("Inference"),
-             tags$p("The visualisation reveals several key trends. Over time, the proportion of renewable energy sources, such as wind, solar, and biomass, has steadily increased, reflecting the UK’s focus on decarbonization and sustainability. Wind energy, in particular, shows sharp increases, becoming a major contributor to the national grid. Meanwhile, fossil fuel-based energy sources demonstrate a declining trend, especially coal, which was almost entirely phased out in recent years."),
-             tags$p("Periods of peak demand, visible as seasonal patterns, highlight the role of intermittent renewables and the growing dependence on energy storage technologies and interconnector imports to stabilize the grid. The visualisation also suggests that government interventions—such as the Carbon Price Floor policy and investments in renewable infrastructure—have played a crucial role in driving these transitions. This transformation underscores the UK’s journey toward meeting its net-zero emissions goals and maintaining energy security amid a changing climate and economy.", style="margin-bottom:20px;")
+               ),
+               tags$p(" ", style="margin-bottom:40px;margin-bottom:40px;"),
+               fluidRow(
+                 column(4,
+                        wellPanel(
+                          tags$h4("Interactive Filters"),
+                          selectInput("timeResolutionStream", "Select Time Resolution:",
+                                      choices = c("Monthly", "Yearly"))
+                        )),
+                 column(8, streamgraphOutput("energyStreamGraph")),
+                 tags$p("", style="margin-bottom:40px;")
+               ),
+               
+               tags$h2("Inference"),
+               tags$p("The visualisation reveals several key trends. Over time, the proportion of renewable energy sources, such as wind, solar, and biomass, has steadily increased, reflecting the UK’s focus on decarbonization and sustainability. Wind energy, in particular, shows sharp increases, becoming a major contributor to the national grid. Meanwhile, fossil fuel-based energy sources demonstrate a declining trend, especially coal, which was almost entirely phased out in recent years."),
+               tags$p("Periods of peak demand, visible as seasonal patterns, highlight the role of intermittent renewables and the growing dependence on energy storage technologies and interconnector imports to stabilize the grid. The visualisation also suggests that government interventions—such as the Carbon Price Floor policy and investments in renewable infrastructure—have played a crucial role in driving these transitions. This transformation underscores the UK’s journey toward meeting its net-zero emissions goals and maintaining energy security amid a changing climate and economy.", style="margin-bottom:20px;")
              ),
              
              # Interconnector Network Section
@@ -139,7 +141,7 @@ ui <- navbarPage(
                Imports are represented by green-colored lines, while exports are marked in red. The thickness of 
                the lines remains constant to represent the infrastructure, but the opacity varies according to the 
                magnitude of the energy flows, giving users a quick sense of the volume being traded.", style="margin-left:-20px;"),
-                 
+             
              tags$p("The energy network represented on the map allows the user to explore how energy imports and exports 
                have evolved between 2009 and 2024. This can be crucial for understanding energy dependency, 
                the dynamics of renewable energy, and the role of external markets in the UK’s energy mix. Hover 
@@ -171,9 +173,9 @@ ui <- navbarPage(
                mainPanel(
                  leafletOutput("dnoMap", height = "700px")
                )
-           ),
-           tags$p("The interconnector flow visualisation highlights the evolution of electricity exchange between the UK and neighboring countries, showing how imports and exports help balance the grid during periods of high demand or surplus generation. Over the years, the UK’s reliance on imports has grown, especially during winters, with IFA and IFA2 interconnectors with France consistently delivering nuclear-generated electricity. Interconnectors like Nemo (Belgium) and BritNed (Netherlands) also diversify supply.", style="margin-top:40px;"),
-           tags$p("The flow trends reflect renewable generation variability—the UK exports electricity during high wind output and imports during low output or grid stress. Post-Brexit energy policies have further influenced fluctuations in recent years. The growing interconnectivity underscores the importance of interconnectors for energy security and climate goals, promoting the exchange of low-carbon electricity across borders.", style="margin-bottom:40px;")
+             ),
+             tags$p("The interconnector flow visualisation highlights the evolution of electricity exchange between the UK and neighboring countries, showing how imports and exports help balance the grid during periods of high demand or surplus generation. Over the years, the UK’s reliance on imports has grown, especially during winters, with IFA and IFA2 interconnectors with France consistently delivering nuclear-generated electricity. Interconnectors like Nemo (Belgium) and BritNed (Netherlands) also diversify supply.", style="margin-top:40px;"),
+             tags$p("The flow trends reflect renewable generation variability—the UK exports electricity during high wind output and imports during low output or grid stress. Post-Brexit energy policies have further influenced fluctuations in recent years. The growing interconnectivity underscores the importance of interconnectors for energy security and climate goals, promoting the exchange of low-carbon electricity across borders.", style="margin-bottom:40px;")
            )),
   tabPanel("Forecast & Insights",
            fluidPage(
