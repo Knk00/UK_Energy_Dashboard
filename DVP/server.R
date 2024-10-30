@@ -1,3 +1,5 @@
+# server.R
+
 library(shiny)
 library(ggplot2)
 library(dplyr)
@@ -5,6 +7,8 @@ library(lubridate)  # For date parsing
 library(plotly)
 library(streamgraph)
 library(tidyr)
+library(leaflet)
+library(sf)
 
 # Color palette as provided
 pal <- c("#d7263d", "#f46036", "#FFB400", "#13AFEF", "#1b998b", 
@@ -96,5 +100,74 @@ server <- function(input, output, session) {
       sg_fill_manual(values = pal)
     
     sg
+  })
+  
+  # Prepare flow data by selecting relevant columns
+  flow_data <- data_monthly %>%
+    select(timestamp, ifa_flow, ifa2_flow, britned_flow, moyle_flow, east_west_flow, nemo_flow)
+  
+  # Load the DNO shapefile and transform it to WGS84 (long/lat)
+  dno_shapefile <- st_read("../Data/GB DNO License Areas 20240503 as ESRI Shape File.shp") %>%
+    st_transform(crs = 4326)
+  
+  # Country coordinates for interconnector flows
+  countries <- data.frame(
+    country = c("France", "Netherlands", "Belgium", "Ireland", "Norway"),
+    lat = c(48.85, 52.37, 50.85, 53.41, 59.91),
+    lon = c(2.35, 4.90, 4.35, -8.24, 10.75)
+  )
+  
+  # Render the initial map with DNO areas
+  output$dnoMap <- renderLeaflet({
+    leaflet() %>%
+      addTiles() %>%
+      setView(lng = -1.5, lat = 54.0, zoom = 5) %>%
+      addPolygons(
+        data = dno_shapefile,
+        fillColor = "lightblue",
+        color = "black",
+        weight = 1,
+        opacity = 1,
+        fillOpacity = 0.6,
+        label = ~DNO_Full
+      )%>%
+      # Adding a Legend
+      addLegend(
+        position = "bottomright",
+        colors = c("green", "red"),
+        labels = c("Import", "Export"),
+        title = "Flow Direction",
+        opacity = 1
+      )
+  })
+  
+  # Update map with interconnector flows based on selected year
+  observeEvent(input$year, {
+    # Filter flow data for the selected year
+    selected_flow <- flow_data %>%
+      filter(format(as.Date(timestamp, "%Y-%m-%d"), "%Y") == input$year)
+    
+    # Clear previous layers
+    leafletProxy("dnoMap") %>% clearShapes()
+    
+    # Add arrows for each interconnector
+    for (i in 1:nrow(countries)) {
+      interconnector <- names(selected_flow)[i + 1]  # Skip timestamp column
+      flow_value <- selected_flow[[interconnector]]
+      
+      # Determine the flow direction and color
+      direction <- ifelse(flow_value >= 0, "Import", "Export")
+      color <- ifelse(direction == "Import", "green", "red")
+      
+      # Draw line from the UK to the target country
+      leafletProxy("dnoMap") %>%
+        addPolylines(
+          lng = c(-1.5, countries$lon[i]),  # UK to target country
+          lat = c(54.0, countries$lat[i]),
+          color = color,
+          weight = abs(flow_value) / 100,  # Scale line thickness by flow value
+          label = paste(interconnector, ":", round(flow_value, 2), "MW (", direction, ")")
+        )
+    }
   })
 }

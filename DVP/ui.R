@@ -105,8 +105,23 @@ ui <- navbarPage(
                                     choices = c("Monthly", "Yearly"))
                       )),
                column(8, streamgraphOutput("energyStreamGraph"))  # Ensure correct output function
+             ),
+             column(12,
+                    tags$h1("Interconnector Network Flows",style="margin-top:50px;margin-bottom:30px;"),
+                    tags$p("Interconnector highlighting the shift towards more sustainable energy options.")
+             ),
+             # Interconnector Network Section
+             titlePanel("UK Interconnector Network with Time-based Imports/Exports"),
+             sidebarLayout(
+               sidebarPanel(
+                 sliderInput("year", "Select Year:", 
+                             min = 2009, max = 2024, value = 2012, step = 1,
+                             animate = animationOptions(interval = 1000, loop = TRUE))
+               ),
+               mainPanel(leafletOutput("dnoMap", height = "600px", width = "800px"))
              )
            )),
+  
   tabPanel("Data Sources",
            fluidPage(
              tags$h3("Data Sources and Acknowledgements"),
