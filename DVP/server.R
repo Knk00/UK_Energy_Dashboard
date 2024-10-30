@@ -16,7 +16,6 @@ pal <- c("#d7263d", "#f46036", "#FFB400", "#13AFEF", "#1b998b",
 
 # Define server logic
 server <- function(input, output, session) {
-  
   # Read the datasets
   data_monthly <- read.csv("../Data/monthly_merged.csv", header = TRUE, stringsAsFactors = FALSE)
   data_yearly <- read.csv("../Data/yearly_merged_cleaned.csv", header = TRUE, stringsAsFactors = FALSE)
@@ -31,7 +30,6 @@ server <- function(input, output, session) {
   stream_data_yearly <- data_yearly %>%
     select(timestamp, GAS, COAL, NUCLEAR, WIND, HYDRO, IMPORTS, BIOMASS, OTHER, SOLAR, STORAGE)
   
-  
   # Reactive expression to switch data based on input
   filtered_data <- reactive({
     if(input$timeResolution == "Monthly") {
@@ -44,26 +42,45 @@ server <- function(input, output, session) {
   # Output for energy consumption plot
   output$energyPlot <- renderPlotly({
     data <- filtered_data()
+    
+    # Define key events with respective dates
+    key_events <- data.frame(
+      event = c("COVID-19 Pandemic"),
+      date = as.Date(c("2020-03-01"))
+    )
+    
+    # Create the ggplot with vertical lines for events
     p <- ggplot(data, aes(x = timestamp, y = nd)) +
       geom_point(color = "#1f77b4", size = 2, shape = 21, fill = "#1f77b4") +
       geom_line(color = "#1f77b4") +
-      labs(title = "Evolution of Energy Consumption",
-           x = "Date",
-           y = "National Demand (MW)") +
+      
+      # Add vertical lines for events with labels
+      geom_vline(data = key_events, aes(xintercept = as.numeric(date)), 
+                 color = "lightcoral", linetype = "dashed", size = 1) +
+      geom_text(data = key_events, aes(x = date, y = max(data$nd), label = event),
+                angle = 90, hjust = -0.1, nudge_x = 15, size = 4, color = "lightcoral") +
+      
+      # Customize labels and theme
+      labs(
+        title = "Evolution of Energy Consumption",
+        x = "Date",
+        y = "National Demand (MW)"
+      ) +
       theme_minimal() +
       theme(
         plot.background = element_rect(fill = "ghostwhite"),  # Livelier background
         panel.background = element_rect(fill = "ghostwhite"),
         panel.grid.major = element_line(color = "gray", linetype = "dashed"),
-        plot.title = element_text(size=18, hjust=0.5),
-        axis.title.x = element_text(size=12),
-        axis.title.y = element_text(size=12),
-        # axis.label.x = element_text(size=16,margin=margin(t=20)),
-        # axis.label.y = element_text(size=16,margin=margin(r=40)),
+        plot.title = element_text(size = 18, hjust = 0.5),
+        axis.title.x = element_text(size = 12),
+        axis.title.y = element_text(size = 12)
       )
     
-    ggplotly(p)
+    # Convert to an interactive Plotly object
+    ggplotly(p) %>%
+      layout(legend = list(orientation = "h", y = -0.2))  # Adjust legend position if needed
   })
+  
   
   # Reactive expression to switch between monthly and yearly datasets
   streamgraph_data <- reactive({
@@ -85,8 +102,6 @@ server <- function(input, output, session) {
     
     gathered_data$timestamp <- as.Date(gathered_data$timestamp)  # Ensure it is in Date format
     
-    print(head(gathered_data))
-    
     # Check if the gathered data is non-empty
     if (nrow(gathered_data) == 0) {
       return(tags$p("No data available to display."))
@@ -103,7 +118,7 @@ server <- function(input, output, session) {
   })
   
   # Prepare flow data by selecting relevant columns
-  flow_data <- data_monthly %>%
+  flow_data <- data_yearly %>%
     select(timestamp, ifa_flow, ifa2_flow, britned_flow, moyle_flow, east_west_flow, nemo_flow)
   
   # Load the DNO shapefile and transform it to WGS84 (long/lat)
@@ -117,11 +132,17 @@ server <- function(input, output, session) {
     lon = c(2.35, 4.90, 4.35, -8.24, 10.75)
   )
   
-  # Render the initial map with DNO areas
+ 
+  # Create a consistent weight for all pipelines and dynamic flows
+  pipeline_weight <- 5  # Set a fixed pipeline width
+  
+  # Render the map with static pipelines
   output$dnoMap <- renderLeaflet({
     leaflet() %>%
       addTiles() %>%
       setView(lng = -1.5, lat = 54.0, zoom = 5) %>%
+      
+      # DNO areas in light blue
       addPolygons(
         data = dno_shapefile,
         fillColor = "lightblue",
@@ -130,8 +151,19 @@ server <- function(input, output, session) {
         opacity = 1,
         fillOpacity = 0.6,
         label = ~DNO_Full
-      )%>%
-      # Adding a Legend
+      ) %>%
+      
+      # Add static pipelines in consistent gray
+      addPolylines(
+        lng = c(-1.5, countries$lon),
+        lat = c(54.0, countries$lat),
+        color = "gray", 
+        weight = pipeline_weight,  # Use consistent weight
+        opacity = 0.5,  # Slight transparency to prevent visual overload
+        group = "staticPipelines"
+      ) %>%
+      
+      # Add a legend to indicate import and export
       addLegend(
         position = "bottomright",
         colors = c("green", "red"),
@@ -141,33 +173,124 @@ server <- function(input, output, session) {
       )
   })
   
-  # Update map with interconnector flows based on selected year
+  # Update map with dynamic flows based on selected year
   observeEvent(input$year, {
-    # Filter flow data for the selected year
     selected_flow <- flow_data %>%
-      filter(format(as.Date(timestamp, "%Y-%m-%d"), "%Y") == input$year)
+      filter(format(as.Date(timestamp), "%Y") == input$year)
     
-    # Clear previous layers
-    leafletProxy("dnoMap") %>% clearShapes()
+    # Clear previous dynamic flows
+    leafletProxy("dnoMap") %>% clearGroup("dynamicFlows")
     
-    # Add arrows for each interconnector
+    # Draw dynamic flows for each interconnector
     for (i in 1:nrow(countries)) {
-      interconnector <- names(selected_flow)[i + 1]  # Skip timestamp column
+      interconnector <- names(selected_flow)[i + 1]
       flow_value <- selected_flow[[interconnector]]
       
-      # Determine the flow direction and color
+      # Determine direction and corresponding color
       direction <- ifelse(flow_value >= 0, "Import", "Export")
-      color <- ifelse(direction == "Import", "green", "red")
+      flow_color <- ifelse(direction == "Import", "green", "red")
       
-      # Draw line from the UK to the target country
+      # Calculate opacity based on flow magnitude (scaled to 0.1-1 range)
+      flow_opacity <- max(0.1, min(abs(flow_value) / 500, 1))
+      
+      # Add dynamic flow lines
       leafletProxy("dnoMap") %>%
         addPolylines(
-          lng = c(-1.5, countries$lon[i]),  # UK to target country
+          lng = c(-1.5, countries$lon[i]),  # From UK to target country
           lat = c(54.0, countries$lat[i]),
-          color = color,
-          weight = abs(flow_value) / 100,  # Scale line thickness by flow value
-          label = paste(interconnector, ":", round(flow_value, 2), "MW (", direction, ")")
+          color = flow_color,
+          weight = pipeline_weight,  # Keep weight consistent
+          opacity = flow_opacity,  # Adjust opacity based on flow magnitude
+          label = paste(interconnector, ":", round(flow_value, 2), "MW (", direction, ")"),
+          group = "dynamicFlows",
+          labelOptions = labelOptions(noHide = FALSE, textsize = "12px", direction = "center")
         )
     }
+  })
+  
+  combined_data <- read.csv("../Data/combined_forecast_data.csv", stringsAsFactors = FALSE)
+  combined_data$timestamp <- as.Date(combined_data$timestamp)
+  
+  # Separate historical and forecast data
+  historical_data <- combined_data %>% filter(type == "Historical")
+  forecast_data <- combined_data %>% filter(type == "Forecast")
+  
+  # Forecast Plot 1: Low Carbon, Renewables, and National Demand
+  output$forecastPlot1 <- renderPlotly({
+    p1 <- ggplot() +
+      # Plot Historical Data (solid lines)
+      geom_line(data = historical_data, aes(x = timestamp, y = LOW_CARBON, color = "Low Carbon"), size = 1) +
+      geom_line(data = historical_data, aes(x = timestamp, y = RENEWABLE, color = "Renewable"), size = 1) +
+      geom_line(data = historical_data, aes(x = timestamp, y = DEMAND, color = "National Demand"), size = 1) +
+      
+      # Plot Forecast Data (dashed lines)
+      geom_line(data = forecast_data, aes(x = timestamp, y = LOW_CARBON), color = "blue", linetype = "dashed", size = 1) +
+      geom_line(data = forecast_data, aes(x = timestamp, y = RENEWABLE), color = "green", linetype = "dashed", size = 1) +
+      geom_line(data = forecast_data, aes(x = timestamp, y = DEMAND), color = "orange", linetype = "dashed", size = 1) +
+      
+      # Confidence Interval for Forecast Data
+      geom_ribbon(
+        data = forecast_data, aes(x = timestamp, ymin = LOW_CARBON - 500, ymax = LOW_CARBON + 500),
+        fill = "blue", alpha = 0.2
+      ) +
+      
+      # Customize axes
+      scale_x_date(date_labels = "%Y", date_breaks = "1 year") +
+      labs(
+        # title = "Forecast of Low Carbon, Renewables, and National Demand",
+        subtitle = "5-Year Projection with Confidence Interval",
+        x = "Year", y = "MW",
+        color = "Metric", linetype = "Data Type"
+      ) +
+      theme_minimal() +
+      theme(
+        plot.title = element_text(size = 18, hjust = 0.5),
+        legend.position = "bottom",
+        legend.text = element_text(size=14)
+      )
+    
+    # Convert to Plotly
+    ggplotly(p1) %>%
+      layout(legend = list(orientation = "h", y = -0.2))
+  })
+  
+  # Forecast Plot 2: Carbon Intensity
+  output$forecastPlot2 <- renderPlotly({
+    p2 <- ggplot() +
+      # Plot Historical Carbon Intensity (solid line)
+      geom_line(data = historical_data, aes(x = timestamp, y = CARBON_INTENSITY, color = "Carbon Intensity"), size = 1) +
+      
+      # Plot Forecast Carbon Intensity (dashed line)
+      geom_line(data = forecast_data, aes(x = timestamp, y = CARBON_INTENSITY), color = "red", linetype = "dashed", size = 1) +
+      
+      # Confidence Interval for Carbon Intensity Forecast
+      geom_ribbon(
+        data = forecast_data, aes(x = timestamp, ymin = CARBON_INTENSITY - 20, ymax = CARBON_INTENSITY + 20),
+        fill = "red", alpha = 0.2
+      ) +
+      
+      # Customize axes
+      scale_x_date(date_labels = "%Y", date_breaks = "1 year") +
+      labs(
+        # title = "Forecast of Carbon Intensity",
+        subtitle = "5-Year Projection with Confidence Interval",
+        x = "Year", y = "g/kWh",
+        color = "Metric", linetype = "Data Type"
+      ) +
+      theme_minimal() +
+      theme(
+        plot.title = element_text(size = 18, hjust = 0.5),
+        legend.position = "bottom",
+        legend.text = element_text(size=14)
+      )
+    
+    # Convert to Plotly
+    ggplotly(p2) %>%
+      layout(legend = list(orientation = "h", y = -0.2))
+  })
+  
+  # Observe the click event on the action link and switch to the 'Research & Analysis' tab
+  observeEvent(input$toResearch, {
+    updateNavbarPage(session, "navbar", selected = "Research & Analysis")
   })
 }
